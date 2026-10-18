@@ -1,0 +1,5 @@
+
+airflow-connections.env
+.env
+logs/*
+!logs/.gitkeep
