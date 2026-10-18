@@ -112,7 +112,10 @@ def ingest_file(connection, path, file_type):
                 INSERT INTO users
                     (user_id, name, email, created_at)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (user_id) DO NOTHING
+                ON CONFLICT (user_id) DO UPDATE SET
+		    name = EXCLUDED.name,
+		    email = EXCLUDED.email,
+                    created_at = EXCLUDED.created_at
             """, values)
 
         elif file_type == "products":
@@ -151,7 +154,10 @@ def ingest_file(connection, path, file_type):
                 INSERT INTO ecommerce_orders
                     (order_id, user_id, order_date, status)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (order_id) DO NOTHING
+                ON CONFLICT (order_id) DO UPDATE SET
+   		    user_id = EXCLUDED.user_id,
+   		    order_date = EXCLUDED.order_date,
+                    status = EXCLUDED.status
             """, values)
 
         elif file_type == "order_items":
@@ -169,7 +175,9 @@ def ingest_file(connection, path, file_type):
                 INSERT INTO ecommerce_order_items
                     (order_id, product_id, quantity, unit_price)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (order_id, product_id) DO NOTHING
+                ON CONFLICT (order_id, product_id) DO UPDATE SET
+   	            quantity = EXCLUDED.quantity,
+                    unit_price = EXCLUDED.unit_price
             """, values)
 
         else:
