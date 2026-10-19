@@ -79,6 +79,8 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ./incoming:/opt/airflow/incoming
+    - ../postgres/schema/01-ecommerce.sql:/opt/airflow/sql/01-ecommerce.sql:ro
+
   networks:
     - default
     - database
