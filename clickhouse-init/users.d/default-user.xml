@@ -1,0 +1,7 @@
+<clickhouse>
+  <users>
+    <default>
+      <!-- Local dev: no password, allowed from any network (Docker bridge). -->
+    </default>
+  </users>
+</clickhouse>
