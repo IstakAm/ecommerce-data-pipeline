@@ -142,8 +142,10 @@ def ingest_file(connection, path, file_type):
     connection.commit()
     print(f"Loaded {len(rows)} rows from {path.name}")
 
+def ingest_ecommerce_files(file_type):
+    if file_type not in COLUMNS:
+        raise ValueError(f"Unsupported file type: {file_type}")
 
-def ingest_ecommerce_files():
     processed_dir = INCOMING_DIR / "processed"
     failed_dir = INCOMING_DIR / "failed"
     processed_dir.mkdir(parents=True, exist_ok=True)
@@ -152,56 +154,44 @@ def ingest_ecommerce_files():
     hook = PostgresHook(postgres_conn_id="postgres_primary")
     connection = hook.get_conn()
 
-    priority = {
-        "users": 0,
-        "products": 1,
-        "orders": 2,
-        "order_items": 3,
-    }
-
     try:
-        create_tables(connection)
+        # Create schema once via bootstrap — see note below.
+        # create_tables(connection)
 
-        files = [
-            path for path in INCOMING_DIR.glob("*.csv")
-            if get_file_type(path) in priority
-        ]
-        files.sort(key=lambda p: (priority[get_file_type(p)], p.name))
-
-        if not files:
-            print("No new e-commerce CSV files found.")
+        # Only files for THIS type, sorted oldest-first.
+        candidates = sorted(
+            p for p in INCOMING_DIR.glob("*.csv")
+            if get_file_type(p) == file_type
+        )
+        if not candidates:
+            print(f"No new {file_type} CSV files found.")
             return
 
-        for path in files:
-            try:
-                file_type = get_file_type(path)
-                ingest_file(connection, path, file_type)
-                path.rename(processed_dir / path.name)
+        # Process only the OLDEST one. Its batch_id is shared with the
+        # other three types, so the next child DAG will pick the same batch.
+        path = candidates[0]
 
-            except Exception:
-                connection.rollback()
-                if path.exists():
-                    path.rename(failed_dir / path.name)
-                raise
+        try:
+            ingest_file(connection, path, file_type)
+            path.rename(processed_dir / path.name)
+        except Exception:
+            connection.rollback()
+            if path.exists():
+                path.rename(failed_dir / path.name)
+            raise
 
         with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT
-                    (SELECT COUNT(*) FROM users),
-                    (SELECT COUNT(*) FROM products),
-                    (SELECT COUNT(*) FROM ecommerce_orders),
-                    (SELECT COUNT(*) FROM ecommerce_order_items)
-            """)
-            users, products, orders, items = cursor.fetchone()
+            table = {
+                "users": "users", "products": "products",
+                "orders": "ecommerce_orders", "order_items": "ecommerce_order_items",
+            }[file_type]
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            total = cursor.fetchone()[0]
 
-        print(
-            f"Database totals — users: {users}, products: {products}, "
-            f"orders: {orders}, order items: {items}"
-        )
+        print(f"Database total — {file_type}: {total}")
 
     finally:
         connection.close()
-
 
 with DAG(
     dag_id="ingest_ecommerce_files",
