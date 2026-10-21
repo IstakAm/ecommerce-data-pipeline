@@ -91,6 +91,35 @@ services:
 
 
 
+
+  metabase:
+    image: metabase/metabase:v0.50.21
+    container_name: metabase
+    restart: unless-stopped
+    depends_on:
+      primary:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # Metadata DB (Metabase's own state, separate from dataengfirst)
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: metabase
+      MB_DB_PASS: metabase
+      MB_DB_HOST: pg-primary
+      # Site config
+      MB_SITE_NAME: "Ecommerce Analytics"
+      MB_SITE_URL: "http://localhost:3000"
+      # ClickHouse driver plugin dir
+      MB_PLUGINS_DIR: /plugins
+    volumes:
+      - ./metabase-plugins:/plugins
+    networks:
+      - database
+
+
   kafka:
     image: apache/kafka:4.1.1
     container_name: kafka

@@ -5,3 +5,4 @@ __pycache__/
 consumed/*
 !consumed/.gitkeep
 backups/
+metabase-plugins/
