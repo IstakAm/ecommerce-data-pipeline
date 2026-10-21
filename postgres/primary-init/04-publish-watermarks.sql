@@ -30,3 +30,13 @@ FROM (
     SELECT 'order_items',       COALESCE(max(ingest_seq), 0) FROM public.ecommerce_order_items
 ) sub
 WHERE w.pipeline_name = 'ecommerce_to_kafka' AND w.entity = sub.e;
+
+INSERT INTO public.kafka_publish_watermarks (pipeline_name, entity, last_ingest_seq)
+VALUES ('ecommerce_to_kafka', 'products', 0)
+ON CONFLICT (pipeline_name, entity) DO NOTHING;
+
+-- Skip historical backlog (only if you want to avoid re-publishing existing products):
+UPDATE public.kafka_publish_watermarks w
+SET last_ingest_seq = COALESCE((SELECT max(ingest_seq) FROM public.products), 0),
+    last_updated_at = now()
+WHERE w.pipeline_name = 'ecommerce_to_kafka' AND w.entity = 'products';

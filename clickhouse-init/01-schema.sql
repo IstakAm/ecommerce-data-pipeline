@@ -30,5 +30,17 @@ CREATE TABLE IF NOT EXISTS ecommerce.order_items
     unit_price  Decimal(10, 2),
     ingested_at DateTime DEFAULT now()
 )
+
+CREATE TABLE IF NOT EXISTS ecommerce.products
+(
+    product_id  String,
+    name        String,
+    category    String,
+    price       Decimal(10, 2),
+    ingested_at DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(ingested_at)
+ORDER BY product_id;
+
 ENGINE = ReplacingMergeTree(ingested_at)
 ORDER BY (order_id, product_id);

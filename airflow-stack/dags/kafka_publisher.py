@@ -27,10 +27,10 @@ KAFKA_CONN_ID = "kafka_default"
 
 ENTITIES = [
     ("users",       "users"),
+    ("products",    "products"),
     ("orders",      "ecommerce_orders"),
     ("order_items", "ecommerce_order_items"),
 ]
-
 
 def publish_batch(**context):
     pg = PostgresHook(postgres_conn_id="postgres_primary")

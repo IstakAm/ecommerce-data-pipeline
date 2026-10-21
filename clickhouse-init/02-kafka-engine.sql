@@ -102,3 +102,35 @@ SELECT
     toDecimal64(unit_price, 2)          AS unit_price,
     now()                                AS ingested_at
 FROM ecommerce.kafka_order_items;
+
+
+-- =====================================================================
+-- PRODUCTS
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS ecommerce.kafka_products
+(
+    product_id  String,
+    name        String,
+    category    String,
+    price       String
+)
+ENGINE = Kafka
+SETTINGS
+    kafka_broker_list            = 'kafka:9092',
+    kafka_topic_list             = 'ecommerce.products',
+    kafka_group_name             = 'clickhouse-kafka-products',
+    kafka_format                 = 'JSONEachRow',
+    kafka_num_consumers          = 1,
+    kafka_poll_max_batch_size    = 1000;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS ecommerce.kafka_products_mv
+TO ecommerce.products
+AS
+SELECT
+    product_id,
+    name,
+    category,
+    toDecimal64(price, 2)  AS price,
+    now()                  AS ingested_at
+FROM ecommerce.kafka_products;

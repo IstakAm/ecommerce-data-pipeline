@@ -14,6 +14,11 @@ ALTER TABLE public.ecommerce_orders
 ALTER TABLE public.ecommerce_order_items
     ADD COLUMN IF NOT EXISTS ingest_seq BIGINT GENERATED ALWAYS AS IDENTITY;
 
+ALTER TABLE public.products
+    ADD COLUMN IF NOT EXISTS ingest_seq BIGINT GENERATED ALWAYS AS IDENTITY;
+
+CREATE INDEX IF NOT EXISTS idx_products_ingest_seq
+    ON public.products (ingest_seq);
 CREATE INDEX IF NOT EXISTS idx_users_ingest_seq
     ON public.users (ingest_seq);
 CREATE INDEX IF NOT EXISTS idx_ecommerce_orders_ingest_seq

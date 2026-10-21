@@ -4,3 +4,4 @@ __pycache__/
 *.py[cod]
 consumed/*
 !consumed/.gitkeep
+backups/
