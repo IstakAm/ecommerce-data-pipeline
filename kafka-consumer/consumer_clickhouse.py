@@ -1,5 +1,14 @@
 """Kafka consumer that writes messages to ClickHouse.
 
+DEPRECATED — replaced by ClickHouse Kafka engine + Materialized View.
+
+See clickhouse-init/02-kafka-engine.sql for the replacement.
+
+This file is kept for reference only. Do not run it.
+The ClickHouse Kafka engine handles Kafka → ClickHouse natively,
+without a Python consumer, and ClickHouse manages offsets internally.
+
+
 Long-running service. Run as a container, NOT as an Airflow DAG.
 
 Semantics:

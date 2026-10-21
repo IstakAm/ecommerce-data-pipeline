@@ -66,7 +66,7 @@ services:
 
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:24.12
     container_name: clickhouse
     restart: unless-stopped
     ports:
@@ -89,29 +89,6 @@ services:
     networks:
       - database
 
-
-  kafka-consumer-clickhouse:
-    build:
-      context: ./kafka-consumer
-    container_name: kafka-consumer-clickhouse
-    command: ["python", "-u", "/app/consumer_clickhouse.py"]
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_GROUP_ID: clickhouse-consumer
-      KAFKA_TOPICS: ecommerce.users,ecommerce.orders,ecommerce.order_items
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: "8123"
-      CLICKHOUSE_DATABASE: ecommerce
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ""
-    depends_on:
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - database
 
 
   kafka:
