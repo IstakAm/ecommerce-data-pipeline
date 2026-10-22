@@ -1,4 +1,49 @@
+---
+x-airflow-common:
+  &airflow-common
+  image: airflow-custom:2.10.5
+  build:
+    context: ./airflow-stack          # FIX: was "."
+    dockerfile: Dockerfile
+  environment:
+    &airflow-common-env
+    AIRFLOW_CONN_KAFKA_DEFAULT: '{"conn_type": "kafka", "host": "kafka:9092", "extra": {"bootstrap.servers": "kafka:9092"}}'
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow   # FIX host
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow              # FIX host
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__HOSTNAME_CALLABLE: "socket.gethostname"
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/plugins:/opt/airflow/plugins
+    - ./airflow-stack/incoming:/opt/airflow/incoming                                             # FIX
+    - ./postgres/schema/01-ecommerce.sql:/opt/airflow/sql/01-ecommerce.sql:ro                    # FIX
+  networks:
+    - default
+    - database
+  user: "${AIRFLOW_UID:-50000}:0"
+  env_file:
+    - ./airflow-stack/airflow-connections.env          # FIX
+  depends_on:
+    &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    airflow-postgres:                                  # FIX
+      condition: service_healthy
+
 services:
+  # ================================
+  # Part 1: infra
+  # ================================
   primary:
     image: postgres:16
     container_name: pg-primary
@@ -28,9 +73,7 @@ services:
     networks:
       - database
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -48,22 +91,17 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REPLICATION_USER: ${REPLICATION_USER}
       REPLICATION_PASSWORD: ${REPLICATION_PASSWORD}
-    entrypoint:
-      - /bin/bash
-      - /usr/local/bin/replica-entrypoint.sh
+    entrypoint: [/bin/bash, /usr/local/bin/replica-entrypoint.sh]
     volumes:
       - replica_data:/var/lib/postgresql/data
       - ./postgres/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
     networks:
       - database
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
       timeout: 3s
       retries: 30
-
 
   clickhouse:
     image: clickhouse/clickhouse-server:25.3
@@ -76,11 +114,9 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
       - ./clickhouse-init:/docker-entrypoint-initdb.d:ro
-      - ./clickhouse-init/users.d:/etc/clickhouse-server/users.d:ro 
+      - ./clickhouse-init/users.d:/etc/clickhouse-server/users.d:ro
     ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
+      nofile: { soft: 262144, hard: 262144 }
     healthcheck:
       test: [CMD, wget, --no-verbose, --tries=1, --spider, http://localhost:8123/ping]
       interval: 5s
@@ -88,9 +124,6 @@ services:
       retries: 20
     networks:
       - database
-
-
-
 
   metabase:
     image: metabase/metabase:v0.50.21
@@ -102,23 +135,19 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      # Metadata DB (Metabase's own state, separate from dataengfirst)
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase
       MB_DB_PORT: 5432
       MB_DB_USER: metabase
       MB_DB_PASS: metabase
       MB_DB_HOST: pg-primary
-      # Site config
       MB_SITE_NAME: "Ecommerce Analytics"
       MB_SITE_URL: "http://localhost:3000"
-      # ClickHouse driver plugin dir
       MB_PLUGINS_DIR: /plugins
     volumes:
       - ./metabase-plugins:/plugins
     networks:
       - database
-
 
   kafka:
     image: apache/kafka:4.1.1
@@ -143,11 +172,7 @@ services:
       - database
     healthcheck:
       test:
-        - CMD
-        - /opt/kafka/bin/kafka-topics.sh
-        - --bootstrap-server
-        - localhost:9092
-        - --list
+        [CMD, /opt/kafka/bin/kafka-topics.sh, --bootstrap-server, localhost:9092, --list]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -171,7 +196,6 @@ services:
     networks:
       - database
 
-
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -189,14 +213,191 @@ services:
     networks:
       - database
 
+  # ================================
+  # Part 2: Airflow
+  # ================================
+  airflow-postgres:                                    # FIX: renamed from "postgres"
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, airflow]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    networks:
+      - default
+      - database
 
+  redis:
+    image: redis:7.2-bookworm
+    expose:
+      - 6379
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+    networks:
+      - default
+      - database
 
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8080/health]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 
+  file-producer:
+    image: python:3.12-slim
+    container_name: sales-file-producer
+    restart: unless-stopped
+    command: [python, -u, /app/producer.py]
+    volumes:
+      - ./airflow-stack/producer:/app:ro                 # FIX
+      - ./airflow-stack/incoming:/data/incoming          # FIX
+    networks:
+      - database
 
-networks:
-  database:
-    driver: bridge
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8974/health]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        if [[ -z "${AIRFLOW_UID}" ]]; then
+          echo "WARNING: AIRFLOW_UID not set!"
+        fi
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+        disk_available=$$(df / | tail -1 | awk '{print $$4}')
+        warning_resources="false"
+        if (( mem_available < 4000 )); then
+          echo "WARNING: Not enough memory available for Docker. Have $$(numfmt --to iec $$((mem_available * one_meg)))"
+          warning_resources="true"
+        fi
+        if (( cpus_available < 2 )); then
+          echo "WARNING: Not enough CPUs available for Airflow. Have $${cpus_available}"
+          warning_resources="true"
+        fi
+        if (( disk_available < one_meg * 10 )); then
+          echo "WARNING: Not enough disk space available. Have $$(numfmt --to iec $$((disk_available * 1024 )))"
+          warning_resources="true"
+        fi
+        if [[ $${warning_resources} == "true" ]]; then
+          echo "WARNING: You have not enough resources to run Airflow (see above)!"
+        fi
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        exec /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      _PIP_ADDITIONAL_REQUIREMENTS: ''
+    user: "0:0"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-./airflow-stack}:/sources         # FIX
+    networks:
+      - default
+      - database
+
+  airflow-cli:
+    <<: *airflow-common
+    profiles: [debug]
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command: [bash, -c, airflow]
+
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    profiles: [flower]
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:5555/]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
   primary_data:
@@ -204,3 +405,10 @@ volumes:
   kafka_data:
   clickhouse_data:
   clickhouse_logs:
+  postgres-db-volume:
+
+networks:
+  default:
+  database:
+    driver: bridge
+    # NOTE: removed "external: true" — now defined locally, shared by everything
