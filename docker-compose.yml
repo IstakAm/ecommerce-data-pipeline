@@ -3,15 +3,15 @@ x-airflow-common:
   &airflow-common
   image: airflow-custom:2.10.5
   build:
-    context: ./airflow-stack          # FIX: was "."
+    context: ./airflow-stack
     dockerfile: Dockerfile
   environment:
     &airflow-common-env
     AIRFLOW_CONN_KAFKA_DEFAULT: '{"conn_type": "kafka", "host": "kafka:9092", "extra": {"bootstrap.servers": "kafka:9092"}}'
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow   # FIX host
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow              # FIX host
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
@@ -25,19 +25,19 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-./airflow-stack}/plugins:/opt/airflow/plugins
-    - ./airflow-stack/incoming:/opt/airflow/incoming                                             # FIX
-    - ./postgres/schema/01-ecommerce.sql:/opt/airflow/sql/01-ecommerce.sql:ro                    # FIX
+    - ./airflow-stack/incoming:/opt/airflow/incoming
+
   networks:
     - default
     - database
   user: "${AIRFLOW_UID:-50000}:0"
   env_file:
-    - ./airflow-stack/airflow-connections.env          # FIX
+    - ./airflow-stack/airflow-connections.env
   depends_on:
     &airflow-common-depends-on
     redis:
       condition: service_healthy
-    airflow-postgres:                                  # FIX
+    airflow-postgres:
       condition: service_healthy
 
 services:
@@ -198,7 +198,7 @@ services:
   # ================================
   # Part 2: Airflow
   # ================================
-  airflow-postgres:                                    # FIX: renamed from "postgres"
+  airflow-postgres:
     image: postgres:13
     environment:
       POSTGRES_USER: airflow
@@ -254,8 +254,8 @@ services:
     restart: unless-stopped
     command: [python, -u, /app/producer.py]
     volumes:
-      - ./airflow-stack/producer:/app:ro                 # FIX
-      - ./airflow-stack/incoming:/data/incoming          # FIX
+      - ./airflow-stack/producer:/app:ro
+      - ./airflow-stack/incoming:/data/incoming
     networks:
       - database
 
