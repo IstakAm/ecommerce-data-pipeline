@@ -178,24 +178,6 @@ services:
       retries: 15
       start_period: 20s
 
-  kafka-consumer:
-    build:
-      context: ./kafka-consumer
-    container_name: kafka-consumer
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_GROUP_ID: text-file-consumer
-      KAFKA_TOPICS: ecommerce.users,ecommerce.orders,ecommerce.order_items
-      OUTPUT_DIR: /data/consumed
-    volumes:
-      - ./consumed:/data/consumed
-    depends_on:
-      kafka:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - database
-
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
