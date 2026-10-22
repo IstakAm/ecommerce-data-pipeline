@@ -65,7 +65,7 @@ flowchart TD
 6. **Build analytical tables.** ClickHouse Kafka Engine tables consume Kafka topics. Materialized views convert incoming JSON fields to appropriate types and insert them into MergeTree-family analytical tables.
 7. **Explore the data.** Metabase connects to PostgreSQL and ClickHouse for querying and visualization. Kafka UI provides a browser interface for inspecting Kafka.
 
-> **Scope note:** The repository contains additional CDC-related scripts, but the Debezium/Kafka Connect configuration they reference is not included in this archive. The documented core flow above describes the Airflow publisher → Kafka → ClickHouse path.
+
 
 ## Technology stack
 
@@ -185,12 +185,6 @@ flowchart TD
    | ClickHouse HTTP | [http://localhost:8123](http://localhost:8123) | HTTP query endpoint |
 
    PostgreSQL and Kafka are available to other containers through their Compose network. Avoid exposing database and broker ports publicly unless you have configured appropriate access controls.
-
-### Important setup note for this archive
-
-The ZIP supplied for this README does **not** contain every configuration file and service directory referenced by `docker-compose.yml` and the helper scripts. In particular, the compose file refers to local environment/connection configuration, `postgres/schema/01-ecommerce.sql`, and a `kafka-consumer/` build context, while some helper scripts also reference Debezium/Kafka Connect files. Those assets need to be added or the corresponding compose entries/scripts adjusted before a fresh clone can be expected to start successfully.
-
-This is called out explicitly rather than implying that a clean checkout is fully runnable without those files.
 
 ## Airflow workflows
 
