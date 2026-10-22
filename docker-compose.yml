@@ -411,4 +411,4 @@ networks:
   default:
   database:
     driver: bridge
-    # NOTE: removed "external: true" — now defined locally, shared by everything
+
